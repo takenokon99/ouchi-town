@@ -1,5 +1,5 @@
 // おうちタウン 本体: 表示・指の操作・置く場所の判定・保存
-import { drawCharacter, FAMILY, PATTERN_DEFS, metrics, handOverlay, setPack, SPRITES, OUTFIT_IMGS, spriteDefs } from './characters.js';
+import { drawCharacter, FAMILY, PATTERN_DEFS, metrics, handOverlay, setPack, SPRITES, OUTFIT_IMGS, ACC_IMGS, spriteDefs } from './characters.js';
 import { ITEMS, drawItem } from './items.js';
 import { FURNITURE, backgroundSvg, ROOM_DEFS, ROOM_W, WORLD_H, FLOOR_MIN, FLOOR_MAX, FLOOR_DEFAULT, roomShade } from './rooms.js';
 import { unlock, sfx, setMusic } from './sound.js';
@@ -81,6 +81,7 @@ function applySprites() {
     if (SPRITES[c.id]) c.look.sprite = c.id;
     else delete c.look.sprite;
     if (c.look.outfitImg && !OUTFIT_IMGS[c.look.outfitImg]) delete c.look.outfitImg;
+    for (const k of ['accHead', 'accFace']) if (c.look[k] && !ACC_IMGS[c.look[k]]) delete c.look[k];
   }
 }
 let saveTimer = null;
@@ -700,8 +701,8 @@ document.getElementById('pack-file').addEventListener('change', async (ev) => {
   }
 });
 
-// 切り抜きの絵の人は、キャラクターファイルに服が入っているときだけ着替えられる
-document.getElementById('btn-dress').hidden = state.chars.every((c) => c.look.sprite) && !Object.keys(OUTFIT_IMGS).length;
+// 切り抜きの絵の人は、キャラクターファイルに服かアクセサリーが入っているときだけ着替えられる
+document.getElementById('btn-dress').hidden = state.chars.every((c) => c.look.sprite) && !Object.keys(OUTFIT_IMGS).length && !Object.keys(ACC_IMGS).length;
 
 initDress();
 renderAll();

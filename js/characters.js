@@ -278,12 +278,14 @@ export const PATTERN_DEFS = `
 // setPack で登録すると、look.sprite の人はその絵で描く。look.outfitImg があれば、その服に着替えた姿で描く
 export const SPRITES = {};
 export const OUTFIT_IMGS = {};
+export const ACC_IMGS = {}; // アクセサリー。look.accHead（頭）と look.accFace（顔）に1つずつ付けられる
 const K = 1.05; // 切り抜きの画素 → 世界の大きさ
 const LW = 3;   // 切り抜きの絵に足す線の太さ（切り抜きの画素）
 
 export function setPack(pack) {
   for (const [id, m] of Object.entries(pack.chars || {})) SPRITES[id] = m;
   for (const [id, o] of Object.entries(pack.outfits || {})) OUTFIT_IMGS[id] = o;
+  for (const [id, a] of Object.entries(pack.accs || {})) ACC_IMGS[id] = a;
 }
 
 // 絵の本体は defs に1回だけ置き、人を描くときは <use> で参照する（毎回大きなデータを書かない）
@@ -294,7 +296,31 @@ export function spriteDefs() {
     if (m.hairPng) s += `<image id="sprh-${id}" href="${m.hairPng}" width="${m.w}" height="${m.h}"/>`;
   }
   for (const [id, o] of Object.entries(OUTFIT_IMGS)) s += `<image id="out-${id}" href="${o.png}" width="${o.w}" height="${o.h}"/>`;
+  for (const [id, a] of Object.entries(ACC_IMGS)) s += `<image id="acc-${id}" href="${a.png}" width="${a.w}" height="${a.h}"/>`;
   return s;
+}
+
+// アクセサリーを頭・顔に合わせて描く（切り抜きの画素）
+function drawAcc(m, id) {
+  const a = ACC_IMGS[id];
+  if (!a) return '';
+  const hw = m.hr - m.hl;
+  const cx = (m.hl + m.hr) / 2;
+  const [[lx, ly], [rx, ry]] = m.eyes;
+  const eyeD = rx - lx;
+  const W = a.slot === 'face' ? eyeD * a.k : hw * a.k;
+  const s = W / a.w;
+  const to = {
+    ear: [cx, m.ear], brow: [cx, m.brow], top: [cx, m.top], face: [cx, (m.brow + m.neck) / 2],
+    clip: [m.hr - hw * 0.2, m.top + (m.brow - m.top) * 0.35],
+    eyes: [(lx + rx) / 2, (ly + ry) / 2], eyeR: [rx, ry],
+  }[a.to];
+  const x = to[0] - a.ax * W, y = to[1] + a.dy - a.ay * a.h * s;
+  return `<use href="#acc-${id}" transform="translate(${x},${y}) scale(${s})"/>`;
+}
+
+function accessories(m, look) {
+  return (look.accFace ? drawAcc(m, look.accFace) : '') + (look.accHead ? drawAcc(m, look.accHead) : '');
 }
 
 const spriteOf = (look) => (look.sprite && SPRITES[look.sprite]) || null;
@@ -348,7 +374,7 @@ function drawSprite(m, look, uid, opts) {
     } else {
       s += `<use href="${ref}"/>`;
     }
-    return s + eyesAndMouth(m, opts, pose) + '</g>';
+    return s + eyesAndMouth(m, opts, pose) + accessories(m, look) + '</g>';
   }
   // 着替えた姿: うしろ髪 → 脚 → くつ → 服 → 手 → 頭 の順に重ねる
   const f = fitOutfit(m, o);
@@ -366,7 +392,7 @@ function drawSprite(m, look, uid, opts) {
   s += `<use href="#out-${look.outfitImg}" transform="translate(${f.x},${f.y}) scale(${f.s})"/>`;
   for (const h of [f.L, f.R]) s += `<circle cx="${h.x}" cy="${h.y}" r="11.5" fill="${m.skin}" stroke="${INK}" stroke-width="${LW}"/>`;
   s += `<use href="${ref}" clip-path="url(#hd-${uid})"/>`;
-  return s + eyesAndMouth(m, opts, pose) + '</g>';
+  return s + eyesAndMouth(m, opts, pose) + accessories(m, look) + '</g>';
 }
 
 /** 人の体の位置（足元の中央からの距離）。頭・口・手・座ったときの沈み込み */
