@@ -235,7 +235,7 @@ function face(look, expr, closed, uid) {
  */
 export function drawCharacter(look, uid, opts = {}) {
   const sp = spriteOf(look);
-  if (sp) return drawSprite(sp, uid, opts);
+  if (sp) return drawSprite(sp, look, uid, opts);
   const o = OUTFIT[look.outfit] || OUTFIT.suit;
   const pose = opts.pose || 'stand';
   const closed = pose === 'lie' || opts.closed;
@@ -275,38 +275,53 @@ export const PATTERN_DEFS = `
 </pattern>`;
 
 // ---------- キャラクターファイル（pack.json）で読み込む絵。ファイルは端末ごとに読み込み、このリポジトリには入れない ----------
-// pack.json（素材/build_pack.py で作る）を setPack で登録すると、look.sprite の人はその絵で描く
+// setPack で登録すると、look.sprite の人はその絵で描く。look.outfitImg があれば、その服に着替えた姿で描く
 export const SPRITES = {};
+export const OUTFIT_IMGS = {};
 const K = 1.05; // 切り抜きの画素 → 世界の大きさ
+const LW = 3;   // 切り抜きの絵に足す線の太さ（切り抜きの画素）
 
 export function setPack(pack) {
   for (const [id, m] of Object.entries(pack.chars || {})) SPRITES[id] = m;
+  for (const [id, o] of Object.entries(pack.outfits || {})) OUTFIT_IMGS[id] = o;
+}
+
+// 絵の本体は defs に1回だけ置き、人を描くときは <use> で参照する（毎回大きなデータを書かない）
+export function spriteDefs() {
+  let s = '';
+  for (const [id, m] of Object.entries(SPRITES)) {
+    s += `<image id="spr-${id}" href="${m.png}" width="${m.w}" height="${m.h}"/>`;
+    if (m.hairPng) s += `<image id="sprh-${id}" href="${m.hairPng}" width="${m.w}" height="${m.h}"/>`;
+  }
+  for (const [id, o] of Object.entries(OUTFIT_IMGS)) s += `<image id="out-${id}" href="${o.png}" width="${o.w}" height="${o.h}"/>`;
+  return s;
 }
 
 const spriteOf = (look) => (look.sprite && SPRITES[look.sprite]) || null;
+const outfitOf = (look) => (look.outfitImg && OUTFIT_IMGS[look.outfitImg]) || null;
 const toLocal = (m, [x, y]) => ({ x: (x - m.cx) * K, y: (y - m.h) * K });
 
-function drawSprite(m, uid, opts) {
-  const pose = opts.pose || 'stand';
-  const img = `<image href="${m.png}" width="${m.w}" height="${m.h}"/>`;
-  let s = `<g transform="scale(${K}) translate(${-m.cx},${-m.h})">`;
-  if (pose === 'sit') {
-    // 座ると脚が手前に向くので、脚だけ縦に縮める
-    s += `<defs><clipPath id="su-${uid}"><rect x="0" y="0" width="${m.w}" height="${m.hip}"/></clipPath>` +
-      `<clipPath id="sl-${uid}"><rect x="0" y="${m.hip}" width="${m.w}" height="${m.h - m.hip}"/></clipPath></defs>`;
-    s += `<g transform="translate(0,${m.hip}) scale(1,0.45) translate(0,${-m.hip})"><image href="${m.png}" width="${m.w}" height="${m.h}" clip-path="url(#sl-${uid})"/></g>`;
-    s += `<image href="${m.png}" width="${m.w}" height="${m.h}" clip-path="url(#su-${uid})"/>`;
-  } else {
-    s += img;
-  }
-  // 目を閉じる（寝ている・まばたき）
+// 服を人の体に合わせる位置（切り抜きの画素）。袖口の間隔を人の手の間隔にそろえる
+function fitOutfit(m, o) {
+  const span = 2 * (m.hand[0] - m.cx) + 6;
+  let s = span / ((o.R[0] - o.L[0]) * o.w);
+  const top = m.neck - 7;
+  const maxH = m.shoeTop - 8 - top;
+  if (o.h * s > maxH) s = maxH / o.h;
+  const W = o.w * s, H = o.h * s;
+  const x = m.cx - o.neck * W;
+  const hand = (side, dir) => ({ x: x + o[side][0] * W + dir * 0.045 * W, y: top + o[side][1] * H + 0.1 * H });
+  return { x, y: top, s, W, H, hem: top + o.hem * H, L: hand('L', 1), R: hand('R', -1) };
+}
+
+function eyesAndMouth(m, opts, pose) {
+  let s = '';
   if (pose === 'lie' || opts.closed) {
     for (const [ex, ey] of m.eyes) {
       s += `<ellipse cx="${ex}" cy="${ey}" rx="${m.glasses ? 10 : 9}" ry="10" fill="${m.eyeBg}"/>`;
       s += `<path d="M ${ex - 7},${ey} q 7,6 14,0" fill="none" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>`;
     }
   }
-  // 口を一時的に変える（食べる・笑う・おどろく）
   const ex = opts.expr;
   if (ex) {
     const [mx, my] = m.mouth;
@@ -315,22 +330,60 @@ function drawSprite(m, uid, opts) {
     else if (ex === 'grin') s += `<path d="M ${mx - 8},${my - 2} Q ${mx},${my + 11} ${mx + 8},${my - 2} Z" fill="#8c3b4a" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>`;
     else if (ex === 'wow') s += `<ellipse cx="${mx}" cy="${my + 1}" rx="4.5" ry="6" fill="#8c3b4a" stroke="${INK}" stroke-width="2"/>`;
   }
-  return s + '</g>';
+  return s;
+}
+
+function drawSprite(m, look, uid, opts) {
+  const pose = opts.pose || 'stand';
+  const ref = `#spr-${look.sprite}`;
+  const o = outfitOf(look);
+  let s = `<g transform="scale(${K}) translate(${-m.cx},${-m.h})">`;
+  if (!o) {
+    if (pose === 'sit') {
+      // 座ると脚が手前に向くので、脚だけ縦に縮める
+      s += `<defs><clipPath id="su-${uid}"><rect x="0" y="0" width="${m.w}" height="${m.hip}"/></clipPath>` +
+        `<clipPath id="sl-${uid}"><rect x="0" y="${m.hip}" width="${m.w}" height="${m.h - m.hip}"/></clipPath></defs>`;
+      s += `<g transform="translate(0,${m.hip}) scale(1,0.45) translate(0,${-m.hip})"><use href="${ref}" clip-path="url(#sl-${uid})"/></g>`;
+      s += `<use href="${ref}" clip-path="url(#su-${uid})"/>`;
+    } else {
+      s += `<use href="${ref}"/>`;
+    }
+    return s + eyesAndMouth(m, opts, pose) + '</g>';
+  }
+  // 着替えた姿: うしろ髪 → 脚 → くつ → 服 → 手 → 頭 の順に重ねる
+  const f = fitOutfit(m, o);
+  const legTop = f.hem - 14;
+  const lift = pose === 'sit' ? (m.shoeTop - f.hem) * 0.7 : 0; // 座ると脚を短くする
+  const legBot = m.shoeTop + 6 - lift;
+  s += `<defs><clipPath id="hd-${uid}"><rect x="-20" y="-20" width="${m.w + 40}" height="${m.neck + 20}"/></clipPath>` +
+    `<clipPath id="sh-${uid}"><rect x="0" y="${m.shoeTop}" width="${m.w}" height="${m.h - m.shoeTop}"/></clipPath></defs>`;
+  if (m.hairPng) s += `<use href="#sprh-${look.sprite}"/>`;
+  for (const dx of [-18, 18]) {
+    const d = `M ${m.cx + dx},${legTop} L ${m.cx + dx},${legBot}`;
+    s += `<path d="${d}" stroke="${INK}" stroke-width="${21 + LW * 2}" stroke-linecap="round"/><path d="${d}" stroke="${m.skin}" stroke-width="21" stroke-linecap="round"/>`;
+  }
+  s += `<g transform="translate(0,${-lift})"><use href="${ref}" clip-path="url(#sh-${uid})"/></g>`;
+  s += `<use href="#out-${look.outfitImg}" transform="translate(${f.x},${f.y}) scale(${f.s})"/>`;
+  for (const h of [f.L, f.R]) s += `<circle cx="${h.x}" cy="${h.y}" r="11.5" fill="${m.skin}" stroke="${INK}" stroke-width="${LW}"/>`;
+  s += `<use href="${ref}" clip-path="url(#hd-${uid})"/>`;
+  return s + eyesAndMouth(m, opts, pose) + '</g>';
 }
 
 /** 人の体の位置（足元の中央からの距離）。頭・口・手・座ったときの沈み込み */
 export function metrics(look, pose) {
   const m = spriteOf(look);
   if (!m) return { head: { x: 0, y: -200 }, mouth: { x: 0, y: -160 }, hand: handPos(pose), sitDy: 62 };
-  return { head: toLocal(m, m.head), mouth: toLocal(m, m.mouth), hand: toLocal(m, m.hand), sitDy: (m.h - m.hip) * K + 8 };
+  const base = { head: toLocal(m, m.head), mouth: toLocal(m, m.mouth) };
+  const o = outfitOf(look);
+  if (!o) return { ...base, hand: toLocal(m, m.hand), sitDy: (m.h - m.hip) * K + 8 };
+  const f = fitOutfit(m, o);
+  const lift = pose === 'sit' ? (m.shoeTop - f.hem) * 0.7 : 0;
+  return { ...base, hand: toLocal(m, [f.R.x, f.R.y - 6]), sitDy: (m.h - (f.hem - 10)) * K + 8 - lift * K };
 }
 
 /** 物を持ったとき、手を物の手前に描き直す（自作の絵のみ） */
 export function handOverlay(look, uid, pose) {
-  const m = spriteOf(look);
-  if (!m) {
-    const h = handPos(pose);
-    return `<circle cx="${h.x + 1}" cy="${h.y + 10}" r="14" fill="${look.skin}" stroke="${INK}" stroke-width="4"/>`;
-  }
-  return ''; // 切り抜きの絵は手がそでに隠れていることが多いので、物を手の前に置くだけにする
+  if (spriteOf(look)) return ''; // 切り抜きの絵は手がそでに隠れていることが多いので、物を手の前に置くだけにする
+  const h = handPos(pose);
+  return `<circle cx="${h.x + 1}" cy="${h.y + 10}" r="14" fill="${look.skin}" stroke="${INK}" stroke-width="4"/>`;
 }

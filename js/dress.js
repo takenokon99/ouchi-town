@@ -1,5 +1,5 @@
 // きがえ画面（髪・色・はだ・服・顔・めがね）
-import { drawCharacter, HAIRS, HAIR_COLORS, SKINS, OUTFITS, EYES } from './characters.js';
+import { drawCharacter, HAIRS, HAIR_COLORS, SKINS, OUTFITS, EYES, OUTFIT_IMGS } from './characters.js';
 import { sfx } from './sound.js';
 
 const panel = () => document.getElementById('dress');
@@ -20,9 +20,15 @@ const TABS = [
 const body = (look) => `<svg viewBox="-110 -330 220 345" aria-hidden="true">${drawCharacter(look, 'p' + n++)}</svg>`;
 const head = (look) => `<svg viewBox="-105 -325 210 210" aria-hidden="true">${drawCharacter(look, 'p' + n++)}</svg>`;
 
+// 切り抜きの絵の人は、キャラクターファイルの服だけを選べる
+const SPRITE_TABS = [{ id: 'clothes', icon: '👕' }];
+
 function options(c) {
   const L = c.look;
   const with_ = (patch) => ({ ...L, ...patch });
+  if (L.sprite) {
+    return [null, ...Object.keys(OUTFIT_IMGS)].map((o) => ({ on: (L.outfitImg || null) === o, art: body(with_({ outfitImg: o || undefined })), set: { outfitImg: o || undefined } }));
+  }
   switch (tab) {
     case 'hair': return HAIRS.map((h) => ({ on: L.hair === h, art: head(with_({ hair: h })), set: { hair: h } }));
     case 'color': return HAIR_COLORS.map((h) => ({ on: L.hairColor === h, art: `<span class="swatch" style="background:${h}"></span>`, set: { hairColor: h } }));
@@ -47,7 +53,8 @@ function render() {
   const p = panel();
   p.querySelector('.who').innerHTML = st.chars.map((x) => `<button class="who-btn${x.id === c.id ? ' on' : ''}" data-who="${x.id}">${head(x.look)}</button>`).join('');
   p.querySelector('.stage').innerHTML = body(c.look);
-  p.querySelector('.tabs').innerHTML = TABS.map((t) => `<button class="tab${t.id === tab ? ' on' : ''}" data-tab="${t.id}">${t.icon}</button>`).join('');
+  const tabs = c.look.sprite ? SPRITE_TABS : TABS;
+  p.querySelector('.tabs').innerHTML = tabs.map((t) => `<button class="tab${t.id === tab ? ' on' : ''}" data-tab="${t.id}">${t.icon}</button>`).join('');
   const opts = options(c);
   p.querySelector('.opts').innerHTML = opts.map((o, k) => `<button class="opt${o.on ? ' on' : ''}" data-opt="${k}">${o.art}</button>`).join('');
   p._opts = opts;

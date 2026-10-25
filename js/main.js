@@ -1,5 +1,5 @@
 // おうちタウン 本体: 表示・指の操作・置く場所の判定・保存
-import { drawCharacter, FAMILY, PATTERN_DEFS, metrics, handOverlay, setPack, SPRITES } from './characters.js';
+import { drawCharacter, FAMILY, PATTERN_DEFS, metrics, handOverlay, setPack, SPRITES, OUTFIT_IMGS, spriteDefs } from './characters.js';
 import { ITEMS, drawItem } from './items.js';
 import { FURNITURE, backgroundSvg, ROOM_DEFS, ROOM_W, WORLD_H, FLOOR_MIN, FLOOR_MAX, FLOOR_DEFAULT, roomShade } from './rooms.js';
 import { unlock, sfx, setMusic } from './sound.js';
@@ -80,6 +80,7 @@ function applySprites() {
   for (const c of state.chars) {
     if (SPRITES[c.id]) c.look.sprite = c.id;
     else delete c.look.sprite;
+    if (c.look.outfitImg && !OUTFIT_IMGS[c.look.outfitImg]) delete c.look.outfitImg;
   }
 }
 let saveTimer = null;
@@ -100,7 +101,7 @@ function save() {
 // ---------- 画面 ----------
 const svg = document.getElementById('world');
 const L = {};
-svg.innerHTML = `<defs>${PATTERN_DEFS}${ROOM_DEFS}</defs><g id="bg"></g><g id="furn"></g><g id="ents"></g><g id="shade" pointer-events="none"></g><g id="fx" pointer-events="none"></g>`;
+svg.innerHTML = `<defs>${PATTERN_DEFS}${ROOM_DEFS}${spriteDefs()}</defs><g id="bg"></g><g id="furn"></g><g id="ents"></g><g id="shade" pointer-events="none"></g><g id="fx" pointer-events="none"></g>`;
 for (const k of ['bg', 'furn', 'ents', 'shade', 'fx']) L[k] = svg.querySelector('#' + k);
 L.bg.innerHTML = backgroundSvg();
 
@@ -699,8 +700,8 @@ document.getElementById('pack-file').addEventListener('change', async (ev) => {
   }
 });
 
-// 家族がみんな切り抜きの絵のときは、きがえ（自作の絵の部品）は使わない
-document.getElementById('btn-dress').hidden = state.chars.every((c) => c.look.sprite);
+// 切り抜きの絵の人は、キャラクターファイルに服が入っているときだけ着替えられる
+document.getElementById('btn-dress').hidden = state.chars.every((c) => c.look.sprite) && !Object.keys(OUTFIT_IMGS).length;
 
 initDress();
 renderAll();
