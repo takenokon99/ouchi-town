@@ -1,5 +1,5 @@
 // 一度開けば、ネットがなくても遊べるようにする。中身を変えたら VERSION を上げる
-const VERSION = 'ouchi-v3';
+const VERSION = 'ouchi-v4';
 const FILES = [
   './', './index.html', './style.css', './manifest.webmanifest',
   './js/main.js', './js/characters.js', './js/items.js', './js/rooms.js', './js/sound.js', './js/dress.js',

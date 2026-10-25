@@ -29,9 +29,6 @@ function bedroomBg() {
   // ラグ
   s += `<ellipse cx="760" cy="880" rx="320" ry="78" fill="#dcd6de" stroke="#c4bcc8" stroke-width="6"/>`;
   s += `<ellipse cx="760" cy="880" rx="270" ry="58" fill="none" stroke="#ebe6ee" stroke-width="10" stroke-dasharray="30 18"/>`;
-  // 壁の棚
-  s += P('M 1120,380 L 1420,380 L 1420,398 L 1120,398 Z', '#e9c9a0');
-  s += P('M 1150,398 l 0,30 l 20,-30 z M 1390,398 l 0,30 l -20,-30 z', '#e9c9a0');
   return s;
 }
 
@@ -137,6 +134,12 @@ export const FURNITURE = [
     },
   },
   {
+    // 壁の棚（物を置ける）
+    id: 'shelf', room: 0,
+    surfaces: [{ x0: 1125, x1: 1415, y: 380 }],
+    draw: () => P('M 1120,380 L 1420,380 L 1420,398 L 1120,398 Z', '#e9c9a0') + P('M 1150,398 l 0,30 l 20,-30 z M 1390,398 l 0,30 l -20,-30 z', '#e9c9a0'),
+  },
+  {
     id: 'bed', room: 0,
     surfaces: [{ x0: 1040, x1: 1500, y: 690 }],
     bed: { x0: 1030, x1: 1510, y: 700, headX: 1110 },
@@ -155,6 +158,7 @@ export const FURNITURE = [
   // ---------- 台所 ----------
   {
     id: 'fridge', room: 1, tap: 'fridge',
+    surfaces: [{ x0: 1690, x1: 1890, y: 240 }],
     container: { open: 'fridge', x0: 1700, x1: 1880, y0: 270, y1: 770, shelves: [410, 590, 760] },
     draw: (f) => {
       let s = R(1680, 240, 220, 540, 22, '#f2f4f6');
@@ -224,11 +228,13 @@ export const FURNITURE = [
   {
     id: 'chair1', room: 1,
     seat: { x: 2500, y: 724 },
+    surfaces: [{ x0: 2450, x1: 2550, y: 718 }],
     draw: () => chair(2500),
   },
   {
     id: 'chair2', room: 1,
     seat: { x: 3080, y: 724 },
+    surfaces: [{ x0: 3030, x1: 3130, y: 718 }],
     draw: () => chair(3080),
   },
   {
